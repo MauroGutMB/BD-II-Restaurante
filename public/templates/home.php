@@ -1,8 +1,19 @@
 <?php
-
 declare(strict_types=1);
+require_once __DIR__ . '/../bd/models.php';
 
-?><!doctype html>
+$pdo = db_connect();
+
+$stmtPedidos = $pdo->query("SELECT COUNT(*) FROM pedidos WHERE status='aberto'");
+$abertos = $stmtPedidos->fetchColumn();
+
+$stmtCompras = $pdo->query("SELECT COUNT(*) FROM despesas");
+$compras = $stmtCompras->fetchColumn();
+
+$stmtProdutos = $pdo->query("SELECT IFNULL(SUM(estoque),0) FROM produtos");
+$estoque = $stmtProdutos->fetchColumn();
+?>
+<!doctype html>
 <html lang="pt-BR">
 <head>
     <meta charset="utf-8">
@@ -24,6 +35,9 @@ declare(strict_types=1);
                 <a class="nav-link" href="/" aria-current="page">Inicio</a>
                 <a class="nav-link" href="/pedido">Pedidos</a>
                 <a class="nav-link" href="/compra">Compras</a>
+                <a class="nav-link" href="/cliente">Clientes</a>
+                <a class="nav-link" href="/mesa">Mesas</a>
+                <a class="nav-link" href="/cardapio">Cardapio</a>
             </nav>
         </div>
     </header>
@@ -40,11 +54,11 @@ declare(strict_types=1);
             </div>
             <div class="hero-card">
                 <h2>Resumo rapido</h2>
-                <p class="lead">Indicadores simulados para demonstrar a visao geral do CRUD.</p>
+                <p class="lead">Indicadores do CRUD.</p>
                 <ul class="stat-list">
-                    <li class="stat-item"><span>Pedidos em aberto</span><strong>12</strong></li>
-                    <li class="stat-item"><span>Compras pendentes</span><strong>4</strong></li>
-                    <li class="stat-item"><span>Itens em estoque</span><strong>138</strong></li>
+                    <li class="stat-item"><span>Pedidos em aberto</span><strong><?= $abertos ?></strong></li>
+                    <li class="stat-item"><span>Compras pendentes</span><strong><?= $compras ?></strong></li>
+                    <li class="stat-item"><span>Itens em estoque</span><strong><?= $estoque ?></strong></li>
                 </ul>
             </div>
         </section>
@@ -72,18 +86,6 @@ declare(strict_types=1);
                 </ul>
                 <div class="card-actions">
                     <a class="text-link" href="/compra">Abrir painel</a>
-                </div>
-            </article>
-            <article class="card">
-                <h3>Rotina diaria</h3>
-                <p class="lead">Use o painel para manter o time alinhado e agil.</p>
-                <ul class="card-list">
-                    <li>Atualizacoes em tempo real</li>
-                    <li>Campos prontos para integracao</li>
-                    <li>Layout responsivo</li>
-                </ul>
-                <div class="card-actions">
-                    <a class="text-link" href="/pedido">Conferir pedidos</a>
                 </div>
             </article>
         </section>
