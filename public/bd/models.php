@@ -11,6 +11,8 @@ function db_connect() {
         require_once __DIR__ . '/../../sqlite.php';
         $pdo = get_sqlite_connection($db_path);
         create_schema($pdo);
+        migrate_schema($pdo);
+        create_triggers($pdo);
         // Seed if empty
         $stmt = $pdo->query("SELECT COUNT(*) FROM mesas");
         if ($stmt->fetchColumn() == 0) {
@@ -18,6 +20,8 @@ function db_connect() {
             $pdo->exec("INSERT INTO clientes (nome, telefone) VALUES ('Consumidor Final', '000000000')");
             $pdo->exec("INSERT INTO funcionarios (nome, cargo) VALUES ('Atendente 1', 'Caixa')");
         }
+        // Garante que sempre exista um admin para o primeiro acesso
+        seed_admin($pdo);
     }
     return $pdo;
 }
@@ -31,6 +35,22 @@ function get_pedidos() {
                          LEFT JOIN clientes c ON p.id_cliente = c.id_cliente 
                          ORDER BY p.id_pedido DESC");
     return $stmt->fetchAll();
+}
+
+// Itens de todos os pedidos (nota fiscal), agrupados por id_pedido
+function get_itens_por_pedido() {
+    $pdo = db_connect();
+    $stmt = $pdo->query("SELECT i.id_pedido, i.quantidade, i.preco_unitario,
+                                (i.quantidade * i.preco_unitario) as subtotal,
+                                pr.nome as produto
+                         FROM itens_pedido i
+                         JOIN produtos pr ON pr.id_produto = i.id_produto
+                         ORDER BY i.id_pedido, i.id_item");
+    $por_pedido = [];
+    foreach ($stmt->fetchAll() as $item) {
+        $por_pedido[$item['id_pedido']][] = $item;
+    }
+    return $por_pedido;
 }
 
 function create_pedido($id_mesa = 1, $id_cliente = 1, $id_funcionario = 1, $status = 'aberto', $forma = 'DINHEIRO') {
@@ -54,15 +74,18 @@ function delete_pedido($id_pedido) {
 // COMPRAS (Despesas)
 function get_compras() {
     $pdo = db_connect();
-    $stmt = $pdo->query("SELECT * FROM despesas ORDER BY id_despesa DESC");
+    $stmt = $pdo->query("SELECT d.*, f.nome as fornecedor_nome
+                         FROM despesas d
+                         LEFT JOIN fornecedores f ON d.id_fornecedor = f.id_fornecedor
+                         ORDER BY d.id_despesa DESC");
     return $stmt->fetchAll();
 }
 
-function create_compra($descricao, $categoria, $valor, $data) {
+function create_compra($descricao, $categoria, $valor, $data, $id_fornecedor = null) {
     if (empty($data)) $data = date('Y-m-d H:i:s');
     $pdo = db_connect();
-    $stmt = $pdo->prepare("INSERT INTO despesas (descricao, categoria, valor, data_despesa) VALUES (?, ?, ?, ?)");
-    $stmt->execute([$descricao, $categoria, $valor, $data]);
+    $stmt = $pdo->prepare("INSERT INTO despesas (descricao, categoria, valor, data_despesa, id_fornecedor) VALUES (?, ?, ?, ?, ?)");
+    $stmt->execute([$descricao, $categoria, $valor, $data, $id_fornecedor]);
 }
 
 function delete_compra($id_despesa) {
@@ -71,23 +94,26 @@ function delete_compra($id_despesa) {
     $stmt->execute([$id_despesa]);
 }
 
-function update_compra($id, $descricao, $categoria, $valor, $data) {
+function update_compra($id, $descricao, $categoria, $valor, $data, $id_fornecedor = null) {
     $pdo = db_connect();
-    $stmt = $pdo->prepare("UPDATE despesas SET descricao=?, categoria=?, valor=?, data_despesa=? WHERE id_despesa=?");
-    $stmt->execute([$descricao, $categoria, $valor, $data, $id]);
+    $stmt = $pdo->prepare("UPDATE despesas SET descricao=?, categoria=?, valor=?, data_despesa=?, id_fornecedor=? WHERE id_despesa=?");
+    $stmt->execute([$descricao, $categoria, $valor, $data, $id_fornecedor, $id]);
 }
 
 // CLIENTES
 function get_clientes() {
     $pdo = db_connect();
-    $stmt = $pdo->query("SELECT * FROM clientes ORDER BY nome ASC");
+    $stmt = $pdo->query("SELECT c.*, m.numero as mesa_numero
+                         FROM clientes c
+                         LEFT JOIN mesas m ON c.id_mesa = m.id_mesa
+                         ORDER BY c.nome ASC");
     return $stmt->fetchAll();
 }
 
-function create_cliente($nome, $telefone, $email) {
+function create_cliente($nome, $telefone, $email, $id_mesa = null) {
     $pdo = db_connect();
-    $stmt = $pdo->prepare("INSERT INTO clientes (nome, telefone, email) VALUES (?, ?, ?)");
-    $stmt->execute([$nome, $telefone, $email]);
+    $stmt = $pdo->prepare("INSERT INTO clientes (nome, telefone, email, id_mesa) VALUES (?, ?, ?, ?)");
+    $stmt->execute([$nome, $telefone, $email, $id_mesa]);
 }
 
 function delete_cliente($id_cliente) {
@@ -146,22 +172,136 @@ function create_categoria($nome) {
     $stmt->execute([$nome]);
 }
 
-// PEDIDO COM VERIFICAÇÕES E ITENS
-function create_pedido_com_itens($id_mesa, $id_cliente, $id_funcionario, $produtos_quantidades, $forma_pagamento) {
+// USUARIOS (login: admin e servidores)
+function get_usuario_by_login($usuario) {
     $pdo = db_connect();
-    
+    $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE usuario = ? AND ativo = 1");
+    $stmt->execute([$usuario]);
+    return $stmt->fetch() ?: null;
+}
+
+function get_servidores() {
+    $pdo = db_connect();
+    $stmt = $pdo->query("SELECT id_usuario, nome, usuario, perfil, ativo, data_cadastro
+                         FROM usuarios WHERE perfil = 'servidor' ORDER BY nome ASC");
+    return $stmt->fetchAll();
+}
+
+function create_servidor($nome, $usuario, $senha) {
+    $pdo = db_connect();
+    $stmt = $pdo->prepare("INSERT INTO usuarios (nome, usuario, senha, perfil) VALUES (?, ?, ?, 'servidor')");
+    $stmt->execute([$nome, $usuario, password_hash($senha, PASSWORD_DEFAULT)]);
+}
+
+function set_servidor_ativo($id_usuario, $ativo) {
+    $pdo = db_connect();
+    $stmt = $pdo->prepare("UPDATE usuarios SET ativo = ? WHERE id_usuario = ? AND perfil = 'servidor'");
+    $stmt->execute([$ativo ? 1 : 0, $id_usuario]);
+}
+
+function delete_servidor($id_usuario) {
+    $pdo = db_connect();
+    $stmt = $pdo->prepare("DELETE FROM usuarios WHERE id_usuario = ? AND perfil = 'servidor'");
+    $stmt->execute([$id_usuario]);
+}
+
+// FORNECEDORES
+function get_fornecedores() {
+    $pdo = db_connect();
+    $stmt = $pdo->query("SELECT * FROM fornecedores ORDER BY nome ASC");
+    return $stmt->fetchAll();
+}
+
+function create_fornecedor($nome, $cnpj, $telefone, $email) {
+    $pdo = db_connect();
+    $stmt = $pdo->prepare("INSERT INTO fornecedores (nome, cnpj, telefone, email) VALUES (?, ?, ?, ?)");
+    $stmt->execute([$nome, $cnpj, $telefone, $email]);
+}
+
+function delete_fornecedor($id_fornecedor) {
+    $pdo = db_connect();
+    $stmt = $pdo->prepare("DELETE FROM fornecedores WHERE id_fornecedor = ?");
+    $stmt->execute([$id_fornecedor]);
+}
+
+// RELATORIOS (somente gerente)
+// Periodos aceitos: '1m', '3m', '1y'. Qualquer outro valor vira 'todos os tempos'.
+function relatorio_condicao_periodo($periodo, $coluna) {
+    $mapa = ['1m' => '-1 month', '3m' => '-3 months', '1y' => '-1 year'];
+    if (!isset($mapa[$periodo])) {
+        return '1 = 1';
+    }
+    // date() em vez de datetime() para incluir colunas que guardam apenas a data
+    return "$coluna >= date('now', '{$mapa[$periodo]}')";
+}
+
+function get_despesas_por_categoria($periodo) {
+    $pdo = db_connect();
+    $cond = relatorio_condicao_periodo($periodo, 'data_despesa');
+    $stmt = $pdo->query("SELECT IFNULL(NULLIF(categoria, ''), 'Sem categoria') as rotulo,
+                                SUM(valor) as total
+                         FROM despesas
+                         WHERE $cond
+                         GROUP BY rotulo
+                         ORDER BY total DESC");
+    return $stmt->fetchAll();
+}
+
+// Ganhos = itens de pedidos fechados, agrupados pela categoria do produto
+function get_ganhos_por_categoria($periodo) {
+    $pdo = db_connect();
+    $cond = relatorio_condicao_periodo($periodo, 'p.data_pedido');
+    $stmt = $pdo->query("SELECT IFNULL(c.nome, 'Sem categoria') as rotulo,
+                                SUM(i.quantidade * i.preco_unitario) as total
+                         FROM itens_pedido i
+                         JOIN pedidos p ON p.id_pedido = i.id_pedido AND p.status = 'fechado'
+                         JOIN produtos pr ON pr.id_produto = i.id_produto
+                         LEFT JOIN categorias c ON c.id_categoria = pr.id_categoria
+                         WHERE $cond
+                         GROUP BY rotulo
+                         ORDER BY total DESC");
+    return $stmt->fetchAll();
+}
+
+function get_total_despesas($periodo) {
+    $pdo = db_connect();
+    $cond = relatorio_condicao_periodo($periodo, 'data_despesa');
+    $stmt = $pdo->query("SELECT IFNULL(SUM(valor), 0) FROM despesas WHERE $cond");
+    return (float)$stmt->fetchColumn();
+}
+
+function get_total_ganhos($periodo) {
+    $pdo = db_connect();
+    $cond = relatorio_condicao_periodo($periodo, 'p.data_pedido');
+    $stmt = $pdo->query("SELECT IFNULL(SUM(i.quantidade * i.preco_unitario), 0)
+                         FROM itens_pedido i
+                         JOIN pedidos p ON p.id_pedido = i.id_pedido AND p.status = 'fechado'
+                         WHERE $cond");
+    return (float)$stmt->fetchColumn();
+}
+
+// PEDIDO COM VERIFICAÇÕES E ITENS
+// A mesa do pedido vem do cadastro do cliente (clientes.id_mesa).
+function create_pedido_com_itens($id_cliente, $id_funcionario, $produtos_quantidades, $forma_pagamento) {
+    $pdo = db_connect();
+
     // Verificações
+    $stmtCliente = $pdo->prepare("SELECT id_cliente, nome, id_mesa FROM clientes WHERE id_cliente = ?");
+    $stmtCliente->execute([$id_cliente]);
+    $cliente = $stmtCliente->fetch();
+    if (!$cliente) {
+        throw new Exception("Cliente não encontrado.");
+    }
+    if (empty($cliente['id_mesa'])) {
+        throw new Exception("O cliente '{$cliente['nome']}' não possui mesa vinculada.");
+    }
+    $id_mesa = (int)$cliente['id_mesa'];
+
     $stmtMesa = $pdo->prepare("SELECT id_mesa, status FROM mesas WHERE id_mesa = ?");
     $stmtMesa->execute([$id_mesa]);
     $mesa = $stmtMesa->fetch();
     if (!$mesa) {
         throw new Exception("Mesa não encontrada.");
-    }
-    
-    $stmtCliente = $pdo->prepare("SELECT id_cliente FROM clientes WHERE id_cliente = ?");
-    $stmtCliente->execute([$id_cliente]);
-    if (!$stmtCliente->fetch()) {
-        throw new Exception("Cliente não encontrado.");
     }
 
     try {

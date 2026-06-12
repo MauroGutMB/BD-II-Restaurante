@@ -22,25 +22,7 @@ $estoque = $stmtProdutos->fetchColumn();
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-    <header class="topbar">
-        <div class="container topbar-inner">
-            <div class="brand">
-                <span class="brand-mark">RD</span>
-                <div>
-                    <div class="brand-title">Restaurante DB</div>
-                    <div class="brand-sub">Painel de gestao de pedidos e compras</div>
-                </div>
-            </div>
-            <nav class="nav-links">
-                <a class="nav-link" href="/" aria-current="page">Inicio</a>
-                <a class="nav-link" href="/pedido">Pedidos</a>
-                <a class="nav-link" href="/compra">Compras</a>
-                <a class="nav-link" href="/cliente">Clientes</a>
-                <a class="nav-link" href="/mesa">Mesas</a>
-                <a class="nav-link" href="/cardapio">Cardapio</a>
-            </nav>
-        </div>
-    </header>
+    <?php $active = '/'; require __DIR__ . '/partials/topbar.php'; ?>
     <main class="container">
         <section class="hero">
             <div class="hero-content">

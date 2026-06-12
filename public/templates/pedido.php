@@ -2,9 +2,10 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../bd/models.php';
 $pedidos = get_pedidos();
-$mesas = get_mesas();
 $clientes = get_clientes();
 $produtos = get_produtos();
+$itens_por_pedido = get_itens_por_pedido();
+$erro = isset($_GET['erro']) ? (string)$_GET['erro'] : '';
 ?><!doctype html>
 <html lang="pt-BR">
 <head>
@@ -18,22 +19,7 @@ $produtos = get_produtos();
     </style>
 </head>
 <body>
-    <header class="topbar">
-        <div class="container topbar-inner">
-            <div class="brand">
-                <span class="brand-mark">RD</span>
-                <div>
-                    <div class="brand-title">Restaurante DB</div>
-                    <div class="brand-sub">Painel de gestao de pedidos e compras</div>
-                </div>
-            </div>
-            <nav class="nav-links">
-                <a class="nav-link" href="/">Inicio</a>
-                <a class="nav-link" href="/pedido" aria-current="page">Pedidos</a>
-                <a class="nav-link" href="/compra">Compras</a>
-            </nav>
-        </div>
-    </header>
+    <?php $active = '/pedido'; require __DIR__ . '/partials/topbar.php'; ?>
     <main class="container">
         <section class="page-header">
             <div>
@@ -53,6 +39,7 @@ $produtos = get_produtos();
                         <tr>
                             <th>Pedido</th>
                             <th>Mesa/Cliente</th>
+                            <th>Nota fiscal</th>
                             <th>Forma de Pag.</th>
                             <th>Status</th>
                             <th>Acoes</th>
@@ -66,6 +53,32 @@ $produtos = get_produtos();
                                 <div class="cell-sub"><?= htmlspecialchars((string)$p['data_pedido']) ?></div>
                             </td>
                             <td><?= htmlspecialchars($p['mesa'] ? 'Mesa ' . $p['mesa'] : ($p['cliente'] ?: 'N/A')) ?></td>
+                            <td>
+                                <?php $itens = $itens_por_pedido[$p['id_pedido']] ?? []; ?>
+                                <?php if (empty($itens)): ?>
+                                <span class="cell-sub">Sem itens</span>
+                                <?php else: ?>
+                                <?php $total = array_sum(array_column($itens, 'subtotal')); ?>
+                                <details class="nota-fiscal">
+                                    <summary>R$ <?= number_format((float)$total, 2, ',', '.') ?> &middot; <?= count($itens) ?> <?= count($itens) === 1 ? 'item' : 'itens' ?></summary>
+                                    <div class="nota-fiscal-corpo">
+                                        <div class="nota-fiscal-titulo">Nota fiscal &middot; Pedido #<?= $p['id_pedido'] ?></div>
+                                        <ul>
+                                            <?php foreach ($itens as $item): ?>
+                                            <li>
+                                                <span><?= (int)$item['quantidade'] ?>x <?= htmlspecialchars((string)$item['produto']) ?> <small>(R$ <?= number_format((float)$item['preco_unitario'], 2, ',', '.') ?>)</small></span>
+                                                <span>R$ <?= number_format((float)$item['subtotal'], 2, ',', '.') ?></span>
+                                            </li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                        <div class="nota-fiscal-total">
+                                            <span>Total</span>
+                                            <span>R$ <?= number_format((float)$total, 2, ',', '.') ?></span>
+                                        </div>
+                                    </div>
+                                </details>
+                                <?php endif; ?>
+                            </td>
                             <td><?= htmlspecialchars((string)$p['forma_de_pagamento']) ?></td>
                             <td>
                                 <?php
@@ -95,7 +108,7 @@ $produtos = get_produtos();
                         <?php endforeach; ?>
                         <?php if (empty($pedidos)): ?>
                         <tr>
-                            <td colspan="5" style="text-align:center;">Nenhum pedido encontrado.</td>
+                            <td colspan="6" style="text-align:center;">Nenhum pedido encontrado.</td>
                         </tr>
                         <?php endif; ?>
                     </tbody>
@@ -104,26 +117,23 @@ $produtos = get_produtos();
 
             <aside class="form-card" id="form-card">
                 <h2>Criar pedido rapido</h2>
+                <?php if ($erro !== ''): ?>
+                <div class="alert-error"><?= htmlspecialchars($erro) ?></div>
+                <?php endif; ?>
                 <form class="stack" method="POST" action="/">
                     <input type="hidden" name="action" value="create_pedido">
-                    
-                    <label class="field">
-                        <span>Mesa</span>
-                        <select name="id_mesa" required>
-                            <?php foreach ($mesas as $m): ?>
-                            <option value="<?= $m['id_mesa'] ?>">Mesa <?= htmlspecialchars((string)$m['numero']) ?> (Cap: <?= $m['capacidade'] ?>)</option>
-                            <?php endforeach; ?>
-                        </select>
-                    </label>
+
                     <label class="field">
                         <span>Cliente</span>
                         <select name="id_cliente" required>
+                            <option value="">Selecione o cliente</option>
                             <?php foreach ($clientes as $c): ?>
-                            <option value="<?= $c['id_cliente'] ?>"><?= htmlspecialchars((string)$c['nome']) ?></option>
+                            <option value="<?= $c['id_cliente'] ?>"<?= $c['id_mesa'] === null ? ' disabled' : '' ?>><?= htmlspecialchars((string)$c['nome']) ?><?= $c['mesa_numero'] !== null ? ' - Mesa ' . htmlspecialchars((string)$c['mesa_numero']) : ' (sem mesa)' ?></option>
                             <?php endforeach; ?>
                         </select>
+                        <span class="helper">A mesa e definida automaticamente pelo cadastro do cliente.</span>
                     </label>
-                    
+
                     <div class="field">
                         <span>Itens do Pedido</span>
                         <div style="max-height: 200px; overflow-y: auto; background: var(--card); border: 1px solid var(--border); padding: 0.5rem; border-radius: var(--radius-sm);">

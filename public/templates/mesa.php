@@ -15,25 +15,7 @@ $mesas = get_mesas();
     </style>
 </head>
 <body>
-    <header class="topbar">
-        <div class="container topbar-inner">
-            <div class="brand">
-                <span class="brand-mark">RD</span>
-                <div>
-                    <div class="brand-title">Restaurante DB</div>
-                    <div class="brand-sub">Painel de gestao de pedidos e compras</div>
-                </div>
-            </div>
-            <nav class="nav-links">
-                <a class="nav-link" href="/">Inicio</a>
-                <a class="nav-link" href="/pedido">Pedidos</a>
-                <a class="nav-link" href="/compra">Compras</a>
-                <a class="nav-link" href="/cliente">Clientes</a>
-                <a class="nav-link" href="/mesa" aria-current="page">Mesas</a>
-                <a class="nav-link" href="/cardapio">Cardapio</a>
-            </nav>
-        </div>
-    </header>
+    <?php $active = '/mesa'; require __DIR__ . '/partials/topbar.php'; ?>
     <main class="container">
         <section class="page-header">
             <div>

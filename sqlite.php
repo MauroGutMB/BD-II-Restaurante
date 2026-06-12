@@ -28,6 +28,7 @@ function create_schema(PDO $pdo): void
             . "    nome TEXT NOT NULL,\n"
             . "    telefone TEXT,\n"
             . "    email TEXT,\n"
+            . "    id_mesa INTEGER REFERENCES mesas(id_mesa) ON DELETE SET NULL,\n"
             . "    data_cadastro TEXT DEFAULT CURRENT_TIMESTAMP\n"
             . ");",
 
@@ -91,9 +92,52 @@ function create_schema(PDO $pdo): void
             . "    valor NUMERIC NOT NULL,\n"
             . "    data_despesa TEXT\n"
             . ");",
+
+        "CREATE TABLE IF NOT EXISTS fornecedores (\n"
+            . "    id_fornecedor INTEGER PRIMARY KEY AUTOINCREMENT,\n"
+            . "    nome TEXT NOT NULL,\n"
+            . "    cnpj TEXT,\n"
+            . "    telefone TEXT,\n"
+            . "    email TEXT,\n"
+            . "    data_cadastro TEXT DEFAULT CURRENT_TIMESTAMP\n"
+            . ");",
+
+        "CREATE TABLE IF NOT EXISTS usuarios (\n"
+            . "    id_usuario INTEGER PRIMARY KEY AUTOINCREMENT,\n"
+            . "    nome TEXT NOT NULL,\n"
+            . "    usuario TEXT NOT NULL UNIQUE,\n"
+            . "    senha TEXT NOT NULL,\n"
+            . "    perfil TEXT NOT NULL DEFAULT 'servidor' CHECK (perfil IN ('admin','servidor')),\n"
+            . "    ativo INTEGER NOT NULL DEFAULT 1 CHECK (ativo IN (0,1)),\n"
+            . "    data_cadastro TEXT DEFAULT CURRENT_TIMESTAMP\n"
+            . ");",
     ];
 
     execute_statements($pdo, $statements);
+}
+
+function migrate_schema(PDO $pdo): void
+{
+    // Bancos criados antes da tabela fornecedores nao possuem a coluna
+    // despesas.id_fornecedor; adiciona sem perder os dados existentes.
+    $colunas = $pdo->query("PRAGMA table_info(despesas)")->fetchAll();
+    $nomes = array_column($colunas, 'name');
+    if (!in_array('id_fornecedor', $nomes, true)) {
+        $pdo->exec(
+            "ALTER TABLE despesas ADD COLUMN id_fornecedor INTEGER "
+            . "REFERENCES fornecedores(id_fornecedor) ON DELETE SET NULL"
+        );
+    }
+
+    // Cliente vinculado a uma mesa no cadastro; o pedido usa a mesa do cliente.
+    $colunas = $pdo->query("PRAGMA table_info(clientes)")->fetchAll();
+    $nomes = array_column($colunas, 'name');
+    if (!in_array('id_mesa', $nomes, true)) {
+        $pdo->exec(
+            "ALTER TABLE clientes ADD COLUMN id_mesa INTEGER "
+            . "REFERENCES mesas(id_mesa) ON DELETE SET NULL"
+        );
+    }
 }
 
 function create_triggers(PDO $pdo): void
@@ -142,11 +186,6 @@ function create_triggers(PDO $pdo): void
 function seed_data(PDO $pdo): void
 {
     $statements = [
-        "INSERT INTO clientes (nome, telefone, email) VALUES\n"
-            . "('Joao Silva', '11999990001', 'joao@email.com'),\n"
-            . "('Maria Oliveira', '11999990002', 'maria@email.com'),\n"
-            . "('Carlos Souza', '11999990003', 'carlos@email.com');",
-
         "INSERT INTO funcionarios (nome, cargo, salario, data_contratacao) VALUES\n"
             . "('Ana Costa', 'Garcom', 2500.00, '2023-01-10'),\n"
             . "('Pedro Lima', 'Garcom', 2400.00, '2023-03-15'),\n"
@@ -157,6 +196,12 @@ function seed_data(PDO $pdo): void
             . "(2, 2, 'ocupada'),\n"
             . "(3, 6, 'livre'),\n"
             . "(4, 8, 'reservada');",
+
+        // Mesas precisam existir antes (FK clientes.id_mesa)
+        "INSERT INTO clientes (nome, telefone, email, id_mesa) VALUES\n"
+            . "('Joao Silva', '11999990001', 'joao@email.com', 1),\n"
+            . "('Maria Oliveira', '11999990002', 'maria@email.com', 2),\n"
+            . "('Carlos Souza', '11999990003', 'carlos@email.com', 3);",
 
         "INSERT INTO categorias (nome) VALUES\n"
             . "('Prato Principal'),\n"
@@ -188,9 +233,25 @@ function seed_data(PDO $pdo): void
             . "('Energia eletrica', 'Energia', 850.00, '2026-03-05'),\n"
             . "('Compra de carnes', 'Insumos', 1200.00, '2026-03-10'),\n"
             . "('Compra de bebidas', 'Insumos', 600.00, '2026-03-12');",
+        "INSERT INTO fornecedores (nome, cnpj, telefone, email) VALUES\n"
+            . "('Frigorifico Bom Corte', '12.345.678/0001-90', '8632220001', 'contato@bomcorte.com'),\n"
+            . "('Distribuidora Bebidas Sul', '98.765.432/0001-10', '8632220002', 'vendas@bebidassul.com');",
     ];
 
     execute_statements($pdo, $statements);
+
+    seed_admin($pdo);
+}
+
+function seed_admin(PDO $pdo): void
+{
+    $stmt = $pdo->query("SELECT COUNT(*) FROM usuarios WHERE perfil = 'admin'");
+    if ((int)$stmt->fetchColumn() === 0) {
+        $insert = $pdo->prepare(
+            "INSERT INTO usuarios (nome, usuario, senha, perfil) VALUES (?, ?, ?, 'admin')"
+        );
+        $insert->execute(['Gerente', 'admin', password_hash('admin123', PASSWORD_DEFAULT)]);
+    }
 }
 
 function initialize_database(string $db_path, bool $seed = true): PDO
@@ -198,6 +259,7 @@ function initialize_database(string $db_path, bool $seed = true): PDO
     $pdo = get_sqlite_connection($db_path);
 
     create_schema($pdo);
+    migrate_schema($pdo);
     create_triggers($pdo);
 
     if ($seed) {

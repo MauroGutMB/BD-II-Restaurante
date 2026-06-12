@@ -1,8 +1,10 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../bd/models.php';
+require_once __DIR__ . '/../bd/auth.php';
 $produtos = get_produtos();
 $categorias = get_categorias();
+$pode_gerenciar = is_admin();
 ?><!doctype html>
 <html lang="pt-BR">
 <head>
@@ -16,39 +18,23 @@ $categorias = get_categorias();
     </style>
 </head>
 <body>
-    <header class="topbar">
-        <div class="container topbar-inner">
-            <div class="brand">
-                <span class="brand-mark">RD</span>
-                <div>
-                    <div class="brand-title">Restaurante DB</div>
-                    <div class="brand-sub">Painel de gestao de pedidos e compras</div>
-                </div>
-            </div>
-            <nav class="nav-links">
-                <a class="nav-link" href="/">Inicio</a>
-                <a class="nav-link" href="/pedido">Pedidos</a>
-                <a class="nav-link" href="/compra">Compras</a>
-                <a class="nav-link" href="/cliente">Clientes</a>
-                <a class="nav-link" href="/mesa">Mesas</a>
-                <a class="nav-link" href="/cardapio" aria-current="page">Cardapio</a>
-            </nav>
-        </div>
-    </header>
+    <?php $active = '/cardapio'; require __DIR__ . '/partials/topbar.php'; ?>
     <main class="container">
         <section class="page-header">
             <div>
                 <p class="eyebrow">Cardapio</p>
-                <h1>Gerenciar Cardapio (Produtos)</h1>
-                <p class="lead">Produtos disponiveis no menu e em estoque.</p>
+                <h1><?= $pode_gerenciar ? 'Gerenciar Cardapio (Produtos)' : 'Cardapio (Produtos)' ?></h1>
+                <p class="lead"><?= $pode_gerenciar ? 'Produtos disponiveis no menu e em estoque.' : 'Consulta dos produtos do menu. Somente o gerente pode alterar o cardapio.' ?></p>
             </div>
+            <?php if ($pode_gerenciar): ?>
             <div class="page-actions">
                 <a class="button" href="#form-card">Novo Produto</a>
                 <a class="button button-ghost" href="#form-cat">Nova Categoria</a>
             </div>
+            <?php endif; ?>
         </section>
 
-        <section class="layout">
+        <section class="layout"<?= $pode_gerenciar ? '' : ' style="grid-template-columns: 1fr;"' ?>>
             <div class="table-card">
                 <table>
                     <thead>
@@ -57,7 +43,9 @@ $categorias = get_categorias();
                             <th>Categoria</th>
                             <th>Preço</th>
                             <th>Estoque</th>
+                            <?php if ($pode_gerenciar): ?>
                             <th>Acoes</th>
+                            <?php endif; ?>
                         </tr>
                     </thead>
                     <tbody>
@@ -67,6 +55,7 @@ $categorias = get_categorias();
                             <td><?= htmlspecialchars((string)$p['categoria_nome']) ?></td>
                             <td>R$ <?= number_format((float)$p['preco'], 2, ',', '.') ?></td>
                             <td><?= htmlspecialchars((string)$p['estoque']) ?></td>
+                            <?php if ($pode_gerenciar): ?>
                             <td>
                                 <form method="POST" action="/" class="inline-form">
                                     <input type="hidden" name="action" value="delete_produto">
@@ -74,17 +63,19 @@ $categorias = get_categorias();
                                     <button class="text-link" type="submit" style="color:red" onclick="return confirm('Tem certeza?')">Apagar</button>
                                 </form>
                             </td>
+                            <?php endif; ?>
                         </tr>
                         <?php endforeach; ?>
                         <?php if (empty($produtos)): ?>
                         <tr>
-                            <td colspan="5" style="text-align:center;">Nenhum produto cadastrado.</td>
+                            <td colspan="<?= $pode_gerenciar ? 5 : 4 ?>" style="text-align:center;">Nenhum produto cadastrado.</td>
                         </tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
             </div>
 
+            <?php if ($pode_gerenciar): ?>
             <div class="stack">
                 <aside class="form-card" id="form-card">
                     <h2>Cadastrar Produto</h2>
@@ -135,6 +126,7 @@ $categorias = get_categorias();
                     </form>
                 </aside>
             </div>
+            <?php endif; ?>
         </section>
     </main>
 </body>

@@ -1,8 +1,11 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../bd/models.php';
+require_once __DIR__ . '/../bd/auth.php';
 
 $compras = get_compras();
+$fornecedores = get_fornecedores();
+$pode_gerenciar = is_admin();
 ?><!doctype html>
 <html lang="pt-BR">
 <head>
@@ -16,47 +19,34 @@ $compras = get_compras();
     </style>
 </head>
 <body>
-    <header class="topbar">
-        <div class="container topbar-inner">
-            <div class="brand">
-                <span class="brand-mark">RD</span>
-                <div>
-                    <div class="brand-title">Restaurante DB</div>
-                    <div class="brand-sub">Painel de gestao de pedidos e compras</div>
-                </div>
-            </div>
-            <nav class="nav-links">
-                <a class="nav-link" href="/">Inicio</a>
-                <a class="nav-link" href="/pedido">Pedidos</a>
-                <a class="nav-link" href="/compra" aria-current="page">Compras</a>
-                <a class="nav-link" href="/cliente">Clientes</a>
-                <a class="nav-link" href="/mesa">Mesas</a>
-                <a class="nav-link" href="/cardapio">Cardapio</a>
-            </nav>
-        </div>
-    </header>
+    <?php $active = '/compra'; require __DIR__ . '/partials/topbar.php'; ?>
     <main class="container">
         <section class="page-header">
             <div>
                 <p class="eyebrow">Compras</p>
-                <h1>Gerenciar compras</h1>
-                <p class="lead">Centralize fornecedores, estoque e pagamentos com um fluxo simples de CRUD.</p>
+                <h1><?= $pode_gerenciar ? 'Gerenciar compras' : 'Compras' ?></h1>
+                <p class="lead"><?= $pode_gerenciar ? 'Centralize fornecedores, estoque e pagamentos com um fluxo simples de CRUD.' : 'Consulta das compras de fornecedores. Somente o gerente pode registrar ou alterar compras.' ?></p>
             </div>
+            <?php if ($pode_gerenciar): ?>
             <div class="page-actions">
                 <a class="button" href="#form-card">Nova compra</a>
             </div>
+            <?php endif; ?>
         </section>
 
-        <section class="layout">
+        <section class="layout"<?= $pode_gerenciar ? '' : ' style="grid-template-columns: 1fr;"' ?>>
             <div class="table-card">
                 <table>
                     <thead>
                         <tr>
                             <th>Descricao</th>
                             <th>Categoria</th>
+                            <th>Fornecedor</th>
                             <th>Data</th>
                             <th>Valor</th>
+                            <?php if ($pode_gerenciar): ?>
                             <th>Acoes</th>
+                            <?php endif; ?>
                         </tr>
                     </thead>
                     <tbody>
@@ -66,13 +56,15 @@ $compras = get_compras();
                                 <div class="cell-title"><?= htmlspecialchars((string)$c['descricao']) ?></div>
                             </td>
                             <td><?= htmlspecialchars((string)$c['categoria']) ?></td>
+                            <td><?= htmlspecialchars((string)($c['fornecedor_nome'] ?? '-') ?: '-') ?></td>
                             <td><?= htmlspecialchars((string)$c['data_despesa']) ?></td>
                             <td>R$ <?= number_format((float)$c['valor'], 2, ',', '.') ?></td>
+                            <?php if ($pode_gerenciar): ?>
                             <td>
                                 <div class="button-row">
                                     <!-- Using simple JS to populate edit form -->
-                                    <button class="text-link" onclick="editCompra(<?= $c['id_despesa'] ?>, '<?= htmlspecialchars($c['descricao']) ?>', '<?= htmlspecialchars($c['categoria']) ?>', '<?= $c['valor'] ?>', '<?= $c['data_despesa'] ?>')">Editar</button>
-                                    
+                                    <button class="text-link" onclick="editCompra(<?= $c['id_despesa'] ?>, '<?= htmlspecialchars($c['descricao']) ?>', '<?= htmlspecialchars($c['categoria']) ?>', '<?= $c['valor'] ?>', '<?= $c['data_despesa'] ?>', '<?= $c['id_fornecedor'] ?? '' ?>')">Editar</button>
+
                                     <form method="POST" action="/" class="inline-form">
                                         <input type="hidden" name="action" value="delete_compra">
                                         <input type="hidden" name="id_despesa" value="<?= $c['id_despesa'] ?>">
@@ -80,17 +72,19 @@ $compras = get_compras();
                                     </form>
                                 </div>
                             </td>
+                            <?php endif; ?>
                         </tr>
                         <?php endforeach; ?>
                         <?php if (empty($compras)): ?>
                         <tr>
-                            <td colspan="5" style="text-align:center;">Nenhuma compra encontrada.</td>
+                            <td colspan="<?= $pode_gerenciar ? 6 : 5 ?>" style="text-align:center;">Nenhuma compra encontrada.</td>
                         </tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
             </div>
 
+            <?php if ($pode_gerenciar): ?>
             <aside class="form-card" id="form-card">
                 <h2 id="form-title">Cadastrar nova compra</h2>
                 <form class="stack" method="POST" action="/">
@@ -106,6 +100,15 @@ $compras = get_compras();
                         <input type="text" name="categoria" id="cat-input" required placeholder="Ex: Hortifruti">
                     </label>
                     <label class="field">
+                        <span>Fornecedor (Opcional)</span>
+                        <select name="id_fornecedor" id="fornecedor-input">
+                            <option value="">(Sem fornecedor)</option>
+                            <?php foreach ($fornecedores as $f): ?>
+                            <option value="<?= $f['id_fornecedor'] ?>"><?= htmlspecialchars((string)$f['nome']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+                    <label class="field">
                         <span>Valor (R$)</span>
                         <input type="number" step="0.01" name="valor" id="valor-input" required placeholder="0.00">
                     </label>
@@ -119,18 +122,21 @@ $compras = get_compras();
                     </div>
                 </form>
             </aside>
+            <?php endif; ?>
         </section>
     </main>
 
+    <?php if ($pode_gerenciar): ?>
     <script>
-    function editCompra(id, desc, cat, val, data) {
+    function editCompra(id, desc, cat, val, data, fornecedor) {
         document.getElementById('form-title').innerText = 'Editar compra';
         document.getElementById('action-input').value = 'update_compra';
         document.getElementById('id-input').value = id;
         document.getElementById('desc-input').value = desc;
         document.getElementById('cat-input').value = cat;
         document.getElementById('valor-input').value = val;
-        
+        document.getElementById('fornecedor-input').value = fornecedor || '';
+
         let dateOnly = data.split(' ')[0]; // Em caso de datetime
         document.getElementById('data-input').value = dateOnly;
         
@@ -144,10 +150,12 @@ $compras = get_compras();
         document.getElementById('id-input').value = '';
         document.getElementById('desc-input').value = '';
         document.getElementById('cat-input').value = '';
+        document.getElementById('fornecedor-input').value = '';
         document.getElementById('valor-input').value = '';
         document.getElementById('data-input').value = '<?= date('Y-m-d') ?>';
         document.getElementById('submit-btn').innerText = 'Salvar compra';
     }
     </script>
+    <?php endif; ?>
 </body>
 </html>
