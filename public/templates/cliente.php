@@ -83,14 +83,14 @@ $mesas = get_mesas();
                         <input type="email" name="email">
                     </label>
                     <label class="field">
-                        <span>Mesa</span>
-                        <select name="id_mesa" required>
-                            <option value="">Selecione a mesa</option>
+                        <span>Mesa <span class="cell-sub" style="font-weight:400;">(opcional)</span></span>
+                        <select name="id_mesa">
+                            <option value="">Sem mesa</option>
                             <?php foreach ($mesas as $m): ?>
                             <option value="<?= $m['id_mesa'] ?>">Mesa <?= htmlspecialchars((string)$m['numero']) ?> (Cap: <?= $m['capacidade'] ?>) - <?= htmlspecialchars((string)$m['status']) ?></option>
                             <?php endforeach; ?>
                         </select>
-                        <span class="helper">O pedido do cliente usara automaticamente esta mesa.</span>
+                        <span class="helper">Opcional. Se vinculado, o pedido do cliente usara esta mesa automaticamente.</span>
                     </label>
                     <div class="form-actions">
                         <button class="button" type="submit">Salvar</button>

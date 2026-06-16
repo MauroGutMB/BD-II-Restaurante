@@ -138,6 +138,15 @@ function migrate_schema(PDO $pdo): void
             . "REFERENCES mesas(id_mesa) ON DELETE SET NULL"
         );
     }
+
+    // Servidor responsavel pela mesa (atribuicao gerente -> servidor).
+    $colunas_mesas = $pdo->query("PRAGMA table_info(mesas)")->fetchAll();
+    if (!in_array('id_servidor', array_column($colunas_mesas, 'name'), true)) {
+        $pdo->exec(
+            "ALTER TABLE mesas ADD COLUMN id_servidor INTEGER "
+            . "REFERENCES usuarios(id_usuario) ON DELETE SET NULL"
+        );
+    }
 }
 
 function create_triggers(PDO $pdo): void

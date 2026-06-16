@@ -36,6 +36,26 @@ $pode_gerenciar = is_admin();
 
         <section class="layout"<?= $pode_gerenciar ? '' : ' style="grid-template-columns: 1fr;"' ?>>
             <div class="table-card">
+                <!-- Toolbar: busca + abas de categoria -->
+                <div class="cardapio-toolbar">
+                    <input
+                        type="text"
+                        id="busca-prod"
+                        class="search-input"
+                        placeholder="Buscar por nome ou categoria..."
+                        autocomplete="off"
+                    >
+                    <div class="cat-tabs" id="cat-tabs">
+                        <button class="cat-tab active" type="button" data-cat="">Todos</button>
+                        <?php foreach ($categorias as $cat): ?>
+                        <button class="cat-tab" type="button" data-cat="<?= htmlspecialchars((string)$cat['nome']) ?>">
+                            <?= htmlspecialchars((string)$cat['nome']) ?>
+                        </button>
+                        <?php endforeach; ?>
+                        <button class="cat-tab" type="button" data-cat="__sem__">Sem categoria</button>
+                    </div>
+                </div>
+
                 <table>
                     <thead>
                         <tr>
@@ -48,13 +68,24 @@ $pode_gerenciar = is_admin();
                             <?php endif; ?>
                         </tr>
                     </thead>
-                    <tbody>
-                        <?php foreach ($produtos as $p): ?>
-                        <tr>
+                    <tbody id="tabela-body">
+                        <?php foreach ($produtos as $p):
+                            $cat_nome = (string)($p['categoria_nome'] ?? '');
+                        ?>
+                        <tr
+                            data-nome="<?= htmlspecialchars(strtolower($p['nome'])) ?>"
+                            data-cat="<?= $cat_nome !== '' ? htmlspecialchars($cat_nome) : '__sem__' ?>"
+                        >
                             <td><?= htmlspecialchars((string)$p['nome']) ?></td>
-                            <td><?= htmlspecialchars((string)$p['categoria_nome']) ?></td>
+                            <td>
+                                <?php if ($cat_nome !== ''): ?>
+                                <span class="cat-badge"><?= htmlspecialchars($cat_nome) ?></span>
+                                <?php else: ?>
+                                <span class="cell-sub">—</span>
+                                <?php endif; ?>
+                            </td>
                             <td>R$ <?= number_format((float)$p['preco'], 2, ',', '.') ?></td>
-                            <td><?= htmlspecialchars((string)$p['estoque']) ?></td>
+                            <td><?= (int)$p['estoque'] <= 0 ? '<span class="text-danger">Esgotado</span>' : htmlspecialchars((string)$p['estoque']) ?></td>
                             <?php if ($pode_gerenciar): ?>
                             <td>
                                 <form method="POST" action="/" class="inline-form">
@@ -66,13 +97,12 @@ $pode_gerenciar = is_admin();
                             <?php endif; ?>
                         </tr>
                         <?php endforeach; ?>
-                        <?php if (empty($produtos)): ?>
-                        <tr>
-                            <td colspan="<?= $pode_gerenciar ? 5 : 4 ?>" style="text-align:center;">Nenhum produto cadastrado.</td>
-                        </tr>
-                        <?php endif; ?>
                     </tbody>
                 </table>
+                <div id="sem-resultados" class="sem-resultados" style="display:none;">Nenhum produto encontrado para este filtro.</div>
+                <?php if (empty($produtos)): ?>
+                <p class="sem-resultados">Nenhum produto cadastrado.</p>
+                <?php endif; ?>
             </div>
 
             <?php if ($pode_gerenciar): ?>
@@ -129,5 +159,48 @@ $pode_gerenciar = is_admin();
             <?php endif; ?>
         </section>
     </main>
+
+    <script>
+    (function () {
+        const busca     = document.getElementById('busca-prod');
+        const tabs      = document.querySelectorAll('.cat-tab');
+        const rows      = document.querySelectorAll('#tabela-body tr');
+        const aviso     = document.getElementById('sem-resultados');
+        let catAtiva    = '';
+
+        function filtrar() {
+            const q = busca.value.toLowerCase().trim();
+            let visiveis = 0;
+
+            rows.forEach(row => {
+                const nome = row.dataset.nome || '';
+                const cat  = row.dataset.cat  || '';
+
+                const matchCat  = catAtiva === ''
+                    ? true
+                    : (catAtiva === '__sem__' ? cat === '__sem__' : cat.toLowerCase() === catAtiva.toLowerCase());
+
+                const matchQ = q === '' || nome.includes(q) || cat.toLowerCase().includes(q);
+
+                const visivel = matchCat && matchQ;
+                row.style.display = visivel ? '' : 'none';
+                if (visivel) visiveis++;
+            });
+
+            if (aviso) aviso.style.display = (visiveis === 0 && rows.length > 0) ? '' : 'none';
+        }
+
+        tabs.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabs.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                catAtiva = btn.dataset.cat;
+                filtrar();
+            });
+        });
+
+        busca.addEventListener('input', filtrar);
+    })();
+    </script>
 </body>
 </html>

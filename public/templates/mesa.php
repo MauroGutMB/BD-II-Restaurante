@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../bd/models.php';
 $mesas = get_mesas();
+$servidores = get_servidores();
 ?><!doctype html>
 <html lang="pt-BR">
 <head>
@@ -21,9 +22,10 @@ $mesas = get_mesas();
             <div>
                 <p class="eyebrow">Mesas</p>
                 <h1>Gerenciar Mesas</h1>
-                <p class="lead">Controle de mesas do restaurante.</p>
+                <p class="lead">Crie mesas e atribua servidores responsaveis.</p>
             </div>
             <div class="page-actions">
+                <a class="button button-outline" href="/gerenciar-mesa">Ver ocupacao</a>
                 <a class="button" href="#form-card">Nova Mesa</a>
             </div>
         </section>
@@ -35,28 +37,48 @@ $mesas = get_mesas();
                         <tr>
                             <th>Numero</th>
                             <th>Capacidade</th>
-                            <th>Status actual</th>
+                            <th>Status</th>
+                            <th>Servidor responsavel</th>
                             <th>Acoes</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($mesas as $m): ?>
                         <tr>
-                            <td>Mesa <?= htmlspecialchars((string)$m['numero']) ?></td>
+                            <td><div class="cell-title">Mesa <?= htmlspecialchars((string)$m['numero']) ?></div></td>
                             <td><?= htmlspecialchars((string)$m['capacidade']) ?> pessoas</td>
-                            <td><span class="badge"><?= htmlspecialchars((string)$m['status']) ?></span></td>
                             <td>
-                                <form method="POST" action="/" class="inline-form">
-                                    <input type="hidden" name="action" value="delete_mesa">
-                                    <input type="hidden" name="id_mesa" value="<?= $m['id_mesa'] ?>">
-                                    <button class="text-link" type="submit" style="color:red" onclick="return confirm('Tem certeza?')">Apagar</button>
-                                </form>
+                                <?php
+                                $badge_m = match($m['status']) {
+                                    'ocupada'  => 'badge--warning',
+                                    'livre'    => 'badge--success',
+                                    default    => '',
+                                };
+                                ?>
+                                <span class="badge <?= $badge_m ?>"><?= htmlspecialchars((string)$m['status']) ?></span>
+                            </td>
+                            <td>
+                                <?php if ($m['servidor_nome']): ?>
+                                <span class="cell-title"><?= htmlspecialchars((string)$m['servidor_nome']) ?></span>
+                                <?php else: ?>
+                                <span class="cell-sub">sem servidor</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <div class="button-row">
+                                    <a class="text-link" href="/gerenciar-mesa?id=<?= $m['id_mesa'] ?>">Gerenciar</a>
+                                    <form method="POST" action="/" class="inline-form">
+                                        <input type="hidden" name="action" value="delete_mesa">
+                                        <input type="hidden" name="id_mesa" value="<?= $m['id_mesa'] ?>">
+                                        <button class="text-link" type="submit" style="color:red" onclick="return confirm('Tem certeza?')">Apagar</button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                         <?php endforeach; ?>
                         <?php if (empty($mesas)): ?>
                         <tr>
-                            <td colspan="4" style="text-align:center;">Nenhuma mesa cadastrada.</td>
+                            <td colspan="5" style="text-align:center;">Nenhuma mesa cadastrada.</td>
                         </tr>
                         <?php endif; ?>
                     </tbody>

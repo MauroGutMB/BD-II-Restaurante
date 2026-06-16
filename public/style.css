@@ -857,3 +857,392 @@ textarea {
         grid-template-columns: 1fr;
     }
 }
+
+/* Gerenciar mesas */
+.alert-info {
+    background: #e8f4fd;
+    border: 1px solid #b3d7f5;
+    color: #1a5276;
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.mesa-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.mesa-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    transition: box-shadow 0.15s ease;
+}
+
+.mesa-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+.mesa-card--minha {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 20%, transparent);
+}
+
+.mesa-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.mesa-num {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--brand-dark);
+}
+
+.mesa-card-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.mesa-card-servidor {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--fg, #1a1412);
+    min-height: 2rem;
+}
+
+/* Detalhe da mesa */
+.mesa-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.stack-gap {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.conta-card {
+    padding: 1.5rem;
+}
+
+.conta-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.conta-header h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--brand-dark);
+}
+
+.add-item-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+}
+
+.add-item-form-footer {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.add-item-form-footer .field {
+    margin: 0;
+}
+
+.fechar-conta-form {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed var(--border);
+}
+
+.fechar-conta-form .field {
+    margin: 0;
+    flex: 1;
+    min-width: 160px;
+}
+
+/* Lista de clientes no sidebar */
+.client-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.client-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-alt);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    gap: 0.5rem;
+}
+
+@media (max-width: 900px) {
+    .mesa-detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .mesa-cards-grid {
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    }
+}
+
+/* ========================
+   CARDAPIO: TOOLBAR + BADGES
+   ======================== */
+.cardapio-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    margin-bottom: 1.1rem;
+}
+
+.search-input {
+    width: 100%;
+    padding: 0.58rem 1rem;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.9rem;
+    background: var(--bg-alt);
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.search-input:focus {
+    border-color: var(--brand);
+    background: var(--card);
+}
+
+.cat-tabs {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.cat-tab {
+    padding: 0.28em 0.9em;
+    border-radius: 999px;
+    border: 1.5px solid var(--border);
+    background: var(--card);
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.14s;
+    line-height: 1.6;
+}
+
+.cat-tab:hover {
+    border-color: var(--brand);
+    color: var(--brand);
+}
+
+.cat-tab.active {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #fff;
+}
+
+.cat-badge {
+    display: inline-block;
+    padding: 0.13em 0.52em;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    background: rgba(29,111,105,0.1);
+    color: var(--brand-dark);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.sem-resultados {
+    text-align: center;
+    padding: 2.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+/* ========================
+   PRODUCT PICKER (gerenciar-mesa)
+   ======================== */
+.prod-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.prod-picker-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.cat-chips {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.chip {
+    padding: 0.22em 0.75em;
+    border-radius: 999px;
+    border: 1.5px solid var(--border);
+    background: var(--card);
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.77rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.12s;
+    line-height: 1.5;
+}
+
+.chip:hover {
+    border-color: var(--brand);
+    color: var(--brand);
+}
+
+.chip--active {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #fff;
+}
+
+.prod-picker-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-alt);
+    scrollbar-width: thin;
+}
+
+.prod-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.48rem 0.85rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+    gap: 0.6rem;
+}
+
+.prod-item:last-child { border-bottom: none; }
+
+.prod-item:hover:not(.prod-item--esgotado) {
+    background: rgba(29,111,105,0.07);
+}
+
+.prod-item--selecionado {
+    background: rgba(29,111,105,0.13) !important;
+    box-shadow: inset 3px 0 0 var(--brand);
+}
+
+.prod-item--esgotado {
+    opacity: 0.42;
+    cursor: not-allowed;
+}
+
+.prod-item-info {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.prod-item-nome {
+    font-weight: 600;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.prod-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-shrink: 0;
+}
+
+.prod-item-preco {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--brand-dark);
+}
+
+.prod-item-estoque {
+    font-size: 0.72rem;
+    color: var(--muted);
+}
+
+.text-danger { color: #c0392b; font-weight: 600; }
+
+.prod-selecionado {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.38rem 0.75rem;
+    background: rgba(29,111,105,0.1);
+    border: 1px solid rgba(29,111,105,0.22);
+    border-radius: var(--radius-sm);
+    font-size: 0.83rem;
+}
+
+.prod-selecionado strong {
+    flex: 1;
+    color: var(--brand-dark);
+}
+
+.prod-picker-vazio {
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.84rem;
+    font-style: italic;
+}

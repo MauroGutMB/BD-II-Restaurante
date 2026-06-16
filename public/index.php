@@ -57,6 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'create_mesa', 'delete_mesa',
         'create_produto', 'delete_produto', 'create_categoria',
         'create_compra', 'update_compra', 'delete_compra',
+        'assign_servidor_mesa',
+        'delete_pedido',
     ];
     if (in_array($action, $admin_actions, true) && !is_admin()) {
         http_response_code(403);
@@ -85,6 +87,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         delete_servidor($_POST['id_usuario']);
         header('Location: /servidor');
         exit;
+    }
+
+    // Mesa assignment - somente admin (pode atribuir qualquer servidor a qualquer mesa)
+    if ($action === 'assign_servidor_mesa') {
+        assign_servidor_mesa((int)$_POST['id_mesa'], empty($_POST['id_servidor']) ? null : (int)$_POST['id_servidor']);
+        header('Location: /gerenciar-mesa?id=' . (int)$_POST['id_mesa']);
+        exit;
+    }
+
+    // Servidor se atribui a uma mesa livre (sem responsavel atribuido)
+    if ($action === 'tomar_mesa') {
+        $id_mesa_alvo = (int)($_POST['id_mesa'] ?? 0);
+        $mesa_alvo    = get_mesa_by_id($id_mesa_alvo);
+        $redir_err    = '/gerenciar-mesa?id=' . $id_mesa_alvo . '&erro=';
+        if (!$mesa_alvo || !empty($mesa_alvo['id_servidor'])) {
+            header('Location: ' . $redir_err . urlencode('Esta mesa ja possui um servidor responsavel.'));
+            exit;
+        }
+        $ja_tenho = get_mesa_do_servidor((int)current_user()['id_usuario']);
+        if ($ja_tenho) {
+            header('Location: ' . $redir_err . urlencode('Voce ja e responsavel pela Mesa ' . $ja_tenho['numero'] . '. Libere-a primeiro.'));
+            exit;
+        }
+        assign_servidor_mesa($id_mesa_alvo, (int)current_user()['id_usuario']);
+        header('Location: /gerenciar-mesa?id=' . $id_mesa_alvo);
+        exit;
+    }
+
+    // Gestao da conta da mesa (servidor responsavel ou admin)
+    $mesa_actions = ['criar_conta_mesa', 'add_item_conta', 'remove_item_conta', 'fechar_conta_mesa', 'liberar_mesa_action', 'vincular_cliente_mesa', 'desvincular_cliente_mesa'];
+    if (in_array($action, $mesa_actions, true)) {
+        $id_mesa_acao = (int)($_POST['id_mesa'] ?? 0);
+        if (!mesa_pode_gerenciar($id_mesa_acao)) {
+            http_response_code(403);
+            require __DIR__ . '/templates/403.php';
+            exit;
+        }
+        $redir = '/gerenciar-mesa?id=' . $id_mesa_acao;
+
+        if ($action === 'criar_conta_mesa') {
+            try {
+                criar_conta_mesa($id_mesa_acao);
+            } catch (Exception $e) {
+                header('Location: ' . $redir . '&erro=' . urlencode($e->getMessage()));
+                exit;
+            }
+            header('Location: ' . $redir);
+            exit;
+        }
+        if ($action === 'add_item_conta') {
+            try {
+                add_item_conta((int)$_POST['id_pedido'], (int)$_POST['id_produto'], (int)$_POST['quantidade']);
+            } catch (Exception $e) {
+                header('Location: ' . $redir . '&erro=' . urlencode($e->getMessage()));
+                exit;
+            }
+            header('Location: ' . $redir);
+            exit;
+        }
+        if ($action === 'remove_item_conta') {
+            remove_item_conta((int)$_POST['id_item'], (int)$_POST['id_pedido']);
+            header('Location: ' . $redir);
+            exit;
+        }
+        if ($action === 'fechar_conta_mesa') {
+            fechar_conta((int)$_POST['id_pedido'], $_POST['forma_pagamento'] ?? 'DINHEIRO');
+            header('Location: ' . $redir);
+            exit;
+        }
+        if ($action === 'liberar_mesa_action') {
+            try {
+                liberar_mesa($id_mesa_acao);
+            } catch (Exception $e) {
+                header('Location: /gerenciar-mesa?id=' . $id_mesa_acao . '&erro=' . urlencode($e->getMessage()));
+                exit;
+            }
+            header('Location: /gerenciar-mesa');
+            exit;
+        }
+        if ($action === 'vincular_cliente_mesa') {
+            vincular_cliente_mesa((int)$_POST['id_cliente'], $id_mesa_acao);
+            header('Location: ' . $redir);
+            exit;
+        }
+        if ($action === 'desvincular_cliente_mesa') {
+            desvincular_cliente_mesa((int)$_POST['id_cliente']);
+            header('Location: ' . $redir);
+            exit;
+        }
     }
 
     // Fornecedor Actions - somente admin
@@ -222,6 +313,7 @@ $routes = [
     '/servidor' => __DIR__ . '/templates/servidor.php',
     '/fornecedor' => __DIR__ . '/templates/fornecedor.php',
     '/relatorio' => __DIR__ . '/templates/relatorio.php',
+    '/gerenciar-mesa' => __DIR__ . '/templates/gerenciar-mesa.php',
 ];
 
 // Rotas restritas ao admin (gerente). O cardapio fica visivel aos

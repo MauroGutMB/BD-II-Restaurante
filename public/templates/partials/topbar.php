@@ -12,6 +12,8 @@ $links = [
 ];
 if (is_admin()) {
     $links['/mesa'] = 'Mesas';
+} else {
+    $links['/gerenciar-mesa'] = 'Mesas';
 }
 $links['/cardapio'] = 'Cardapio';
 if (is_admin()) {

@@ -2,7 +2,7 @@
 
 Credenciais dos usuários cadastrados no banco de dados (`database.sqlite`).
 
-> ⚠️ Senhas de desenvolvimento/avaliação. As senhas são armazenadas no banco com hash (bcrypt) — os valores abaixo são apenas para teste local.
+> Senhas armazenadas com hash bcrypt — os valores abaixo são apenas para acesso local/avaliação.
 
 ## Gerente (admin)
 
@@ -10,17 +10,30 @@ Credenciais dos usuários cadastrados no banco de dados (`database.sqlite`).
 | ------- | ------- | ---------- | ------ |
 | Gerente | `admin` | `admin123` | admin  |
 
-O gerente tem acesso total ao sistema, incluindo as páginas **Servidores** (`/servidor`) e **Fornecedores** (`/fornecedor`).
+Acesso total: mesas, cardápio, servidores, fornecedores, relatórios, extrato de pedidos.
 
 ## Servidores
 
-| Nome         | Usuário | Senha      | Perfil   |
-| ------------ | ------- | ---------- | -------- |
-| Maria Santos | `maria` | `maria123` | servidor |
-| Joao Pereira | `joao`  | `joao123`  | servidor |
-| Ana Lima     | `ana`   | `ana123`   | servidor |
+| Nome         | Usuário | Senha      | Mesa responsável |
+| ------------ | ------- | ---------- | ---------------- |
+| Maria Santos | `maria` | `maria123` | Mesa 1           |
+| Joao Pereira | `joao`  | `joao123`  | Mesa 2           |
+| Ana Lima     | `ana`   | `ana123`   | Mesa 3           |
 
-Servidores gerenciam **pedidos**, **clientes**, **compras**, **mesas** e **cardápio**. Não têm acesso às áreas de administração.
+Servidores gerenciam sua mesa: participantes, conta em aberto (itens, fechamento) e liberação da mesa.
+
+## Clientes cadastrados
+
+| Nome             | Mesa   |
+| ---------------- | ------ |
+| Lucas Ferreira   | Mesa 1 |
+| Beatriz Costa    | Mesa 1 |
+| Rafael Almeida   | Mesa 2 |
+| Camila Santos    | Mesa 2 |
+| Diego Oliveira   | Mesa 2 |
+| Fernanda Lima    | Mesa 3 |
+| Carlos Mendes    | Mesa 3 |
+| Sofia Rodrigues  | Mesa 3 |
 
 ## Como rodar
 

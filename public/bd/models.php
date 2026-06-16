@@ -27,12 +27,14 @@ function db_connect() {
 }
 
 // PEDIDOS
+// Retorna apenas pedidos finalizados (extrato/historico)
 function get_pedidos() {
     $pdo = db_connect();
-    $stmt = $pdo->query("SELECT p.*, m.numero as mesa, c.nome as cliente 
-                         FROM pedidos p 
-                         LEFT JOIN mesas m ON p.id_mesa = m.id_mesa 
-                         LEFT JOIN clientes c ON p.id_cliente = c.id_cliente 
+    $stmt = $pdo->query("SELECT p.*, m.numero as mesa, c.nome as cliente
+                         FROM pedidos p
+                         LEFT JOIN mesas m ON p.id_mesa = m.id_mesa
+                         LEFT JOIN clientes c ON p.id_cliente = c.id_cliente
+                         WHERE p.status = 'fechado'
                          ORDER BY p.id_pedido DESC");
     return $stmt->fetchAll();
 }
@@ -125,8 +127,166 @@ function delete_cliente($id_cliente) {
 // MESAS
 function get_mesas() {
     $pdo = db_connect();
-    $stmt = $pdo->query("SELECT * FROM mesas ORDER BY numero ASC");
+    $stmt = $pdo->query("SELECT m.*, u.nome as servidor_nome
+                         FROM mesas m
+                         LEFT JOIN usuarios u ON u.id_usuario = m.id_servidor
+                         ORDER BY m.numero ASC");
     return $stmt->fetchAll();
+}
+
+function get_mesas_detalhes(): array {
+    $pdo = db_connect();
+    $stmt = $pdo->query("SELECT m.*, u.nome as servidor_nome,
+                                (SELECT COUNT(*) FROM clientes c WHERE c.id_mesa = m.id_mesa) as num_clientes,
+                                (SELECT COUNT(*) FROM pedidos p WHERE p.id_mesa = m.id_mesa AND p.status = 'aberto') as pedidos_abertos
+                         FROM mesas m
+                         LEFT JOIN usuarios u ON u.id_usuario = m.id_servidor
+                         ORDER BY m.numero ASC");
+    return $stmt->fetchAll();
+}
+
+function get_mesa_by_id(int $id_mesa): ?array {
+    $pdo = db_connect();
+    $stmt = $pdo->prepare("SELECT m.*, u.nome as servidor_nome
+                           FROM mesas m
+                           LEFT JOIN usuarios u ON u.id_usuario = m.id_servidor
+                           WHERE m.id_mesa = ?");
+    $stmt->execute([$id_mesa]);
+    return $stmt->fetch() ?: null;
+}
+
+function get_mesa_do_servidor(int $id_usuario): ?array {
+    $pdo = db_connect();
+    $stmt = $pdo->prepare("SELECT * FROM mesas WHERE id_servidor = ? LIMIT 1");
+    $stmt->execute([$id_usuario]);
+    return $stmt->fetch() ?: null;
+}
+
+function mesa_pode_gerenciar(int $id_mesa): bool {
+    if (is_admin()) return true;
+    $pdo = db_connect();
+    $stmt = $pdo->prepare("SELECT id_servidor FROM mesas WHERE id_mesa = ?");
+    $stmt->execute([$id_mesa]);
+    $m = $stmt->fetch();
+    $u = current_user();
+    return $m !== false && (int)$m['id_servidor'] === (int)($u['id_usuario'] ?? 0);
+}
+
+function assign_servidor_mesa(int $id_mesa, ?int $id_servidor): void {
+    $pdo = db_connect();
+    $pdo->prepare("UPDATE mesas SET id_servidor = ? WHERE id_mesa = ?")
+        ->execute([$id_servidor ?: null, $id_mesa]);
+}
+
+// GESTAO DA CONTA DA MESA
+
+function get_pedido_aberto_por_mesa(int $id_mesa): ?array {
+    $pdo = db_connect();
+    $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE id_mesa = ? AND status = 'aberto' ORDER BY id_pedido DESC LIMIT 1");
+    $stmt->execute([$id_mesa]);
+    return $stmt->fetch() ?: null;
+}
+
+function get_itens_do_pedido(int $id_pedido): array {
+    $pdo = db_connect();
+    $stmt = $pdo->prepare("SELECT i.*, pr.nome as produto_nome
+                           FROM itens_pedido i
+                           JOIN produtos pr ON pr.id_produto = i.id_produto
+                           WHERE i.id_pedido = ?
+                           ORDER BY i.id_item ASC");
+    $stmt->execute([$id_pedido]);
+    return $stmt->fetchAll();
+}
+
+function get_clientes_da_mesa(int $id_mesa): array {
+    $pdo = db_connect();
+    $stmt = $pdo->prepare("SELECT * FROM clientes WHERE id_mesa = ? ORDER BY nome ASC");
+    $stmt->execute([$id_mesa]);
+    return $stmt->fetchAll();
+}
+
+function get_clientes_sem_mesa(): array {
+    $pdo = db_connect();
+    return $pdo->query("SELECT * FROM clientes WHERE id_mesa IS NULL ORDER BY nome ASC")->fetchAll();
+}
+
+function criar_conta_mesa(int $id_mesa): int {
+    $pdo = db_connect();
+    $c = $pdo->prepare("SELECT id_cliente FROM clientes WHERE id_mesa = ? LIMIT 1");
+    $c->execute([$id_mesa]);
+    $cliente = $c->fetch();
+    $pdo->prepare("INSERT INTO pedidos (id_mesa, id_cliente, id_funcionario, status, forma_de_pagamento) VALUES (?, ?, NULL, 'aberto', 'DINHEIRO')")
+        ->execute([$id_mesa, $cliente ? (int)$cliente['id_cliente'] : null]);
+    $pdo->prepare("UPDATE mesas SET status = 'ocupada' WHERE id_mesa = ? AND status != 'ocupada'")
+        ->execute([$id_mesa]);
+    return (int)$pdo->lastInsertId();
+}
+
+function add_item_conta(int $id_pedido, int $id_produto, int $quantidade): void {
+    if ($quantidade <= 0) return;
+    $pdo = db_connect();
+    $stmtE = $pdo->prepare("SELECT id_item FROM itens_pedido WHERE id_pedido = ? AND id_produto = ?");
+    $stmtE->execute([$id_pedido, $id_produto]);
+    $existente = $stmtE->fetch();
+    if ($existente) {
+        // Trigger before_update cuida do estoque
+        $pdo->prepare("UPDATE itens_pedido SET quantidade = quantidade + ? WHERE id_item = ?")
+            ->execute([$quantidade, $existente['id_item']]);
+    } else {
+        $stmtP = $pdo->prepare("SELECT preco FROM produtos WHERE id_produto = ?");
+        $stmtP->execute([$id_produto]);
+        $prod = $stmtP->fetch();
+        if (!$prod) throw new Exception("Produto nao encontrado.");
+        // Trigger before_insert cuida do estoque
+        $pdo->prepare("INSERT INTO itens_pedido (id_pedido, id_produto, quantidade, preco_unitario) VALUES (?, ?, ?, ?)")
+            ->execute([$id_pedido, $id_produto, $quantidade, $prod['preco']]);
+    }
+}
+
+function remove_item_conta(int $id_item, int $id_pedido): void {
+    // Trigger after_delete restaura estoque automaticamente
+    $pdo = db_connect();
+    $pdo->prepare("DELETE FROM itens_pedido WHERE id_item = ? AND id_pedido = ?")
+        ->execute([$id_item, $id_pedido]);
+}
+
+function fechar_conta(int $id_pedido, string $forma_pagamento): void {
+    $pdo = db_connect();
+    $pdo->prepare("UPDATE pedidos SET status = 'fechado', forma_de_pagamento = ? WHERE id_pedido = ?")
+        ->execute([$forma_pagamento, $id_pedido]);
+}
+
+function liberar_mesa(int $id_mesa): void {
+    // Nao fecha a conta automaticamente: isso e responsabilidade do servidor via 'fechar_conta'.
+    if (get_pedido_aberto_por_mesa($id_mesa)) {
+        throw new Exception("Ha uma conta em aberto nesta mesa. Feche-a antes de liberar.");
+    }
+    $pdo = db_connect();
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare("UPDATE clientes SET id_mesa = NULL WHERE id_mesa = ?")
+            ->execute([$id_mesa]);
+        $pdo->prepare("UPDATE mesas SET status = 'livre', id_servidor = NULL WHERE id_mesa = ?")
+            ->execute([$id_mesa]);
+        $pdo->commit();
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+function vincular_cliente_mesa(int $id_cliente, int $id_mesa): void {
+    $pdo = db_connect();
+    $pdo->prepare("UPDATE clientes SET id_mesa = ? WHERE id_cliente = ?")
+        ->execute([$id_mesa, $id_cliente]);
+    $pdo->prepare("UPDATE mesas SET status = 'ocupada' WHERE id_mesa = ? AND status = 'livre'")
+        ->execute([$id_mesa]);
+}
+
+function desvincular_cliente_mesa(int $id_cliente): void {
+    $pdo = db_connect();
+    $pdo->prepare("UPDATE clientes SET id_mesa = NULL WHERE id_cliente = ?")
+        ->execute([$id_cliente]);
 }
 
 function create_mesa($numero, $capacidade) {
