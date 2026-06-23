@@ -69,6 +69,7 @@ function create_schema(PDO $pdo): void
             . "    id_funcionario INTEGER,\n"
             . "    data_pedido TEXT DEFAULT CURRENT_TIMESTAMP,\n"
             . "    status TEXT NOT NULL DEFAULT 'aberto' CHECK (status IN ('aberto','fechado','cancelado')),\n"
+            . "    pago INTEGER NOT NULL DEFAULT 0 CHECK (pago IN (0,1)),\n"
             . "    forma_de_pagamento TEXT DEFAULT 'DINHEIRO' CHECK (forma_de_pagamento IN ('DINHEIRO','PIX','CARTAO')),\n"
             . "    FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente),\n"
             . "    FOREIGN KEY (id_mesa) REFERENCES mesas(id_mesa),\n"
@@ -147,6 +148,16 @@ function migrate_schema(PDO $pdo): void
             . "REFERENCES usuarios(id_usuario) ON DELETE SET NULL"
         );
     }
+
+    // Confirmacao de pagamento separada do fechamento da conta.
+    // Fechar a conta apenas finaliza os itens (status='fechado'); o pagamento
+    // e confirmado em um passo seguinte, que grava a forma e marca pago=1.
+    $colunas_pedidos = $pdo->query("PRAGMA table_info(pedidos)")->fetchAll();
+    if (!in_array('pago', array_column($colunas_pedidos, 'name'), true)) {
+        $pdo->exec("ALTER TABLE pedidos ADD COLUMN pago INTEGER NOT NULL DEFAULT 0");
+        // Contas ja fechadas antes desta migracao sao historico pago.
+        $pdo->exec("UPDATE pedidos SET pago = 1 WHERE status = 'fechado'");
+    }
 }
 
 function create_triggers(PDO $pdo): void
@@ -224,10 +235,10 @@ function seed_data(PDO $pdo): void
             . "('Suco Natural', 'Suco de laranja 300ml', 8.50, 2, 50),\n"
             . "('Pudim', 'Pudim de leite condensado', 12.00, 3, 50);",
 
-        "INSERT INTO pedidos (id_cliente, id_mesa, id_funcionario, status, forma_de_pagamento) VALUES\n"
-            . "(1, 2, 1, 'aberto', 'DINHEIRO'),\n"
-            . "(2, 3, 2, 'fechado', 'PIX'),\n"
-            . "(3, 1, 1, 'aberto', 'CARTAO');",
+        "INSERT INTO pedidos (id_cliente, id_mesa, id_funcionario, status, pago, forma_de_pagamento) VALUES\n"
+            . "(1, 2, 1, 'aberto', 0, 'DINHEIRO'),\n"
+            . "(2, 3, 2, 'fechado', 1, 'PIX'),\n"
+            . "(3, 1, 1, 'aberto', 0, 'CARTAO');",
 
         "INSERT INTO itens_pedido (id_pedido, id_produto, quantidade, preco_unitario) VALUES\n"
             . "(1, 1, 2, 35.90),\n"
