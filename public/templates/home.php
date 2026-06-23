@@ -30,8 +30,9 @@ $estoque = $stmtProdutos->fetchColumn();
                 <h1>Controle total do fluxo do restaurante</h1>
                 <p class="lead">Acompanhe compras, pedidos e status em um unico lugar. Use os atalhos abaixo para acessar os paineis.</p>
                 <div class="button-row">
-                    <a class="button" href="/pedido">Gerenciar pedidos</a>
-                    <a class="button button-ghost" href="/compra">Gerenciar compras</a>
+                    <a class="button" href="/pedido">Pedidos</a>
+                    <a class="button button-ghost" href="/compra">Compras</a>
+                    <a class="button button-ghost" href="/gerenciar-mesa">Mesas</a>
                 </div>
             </div>
             <div class="hero-card">

@@ -116,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Gestao da conta da mesa (servidor responsavel ou admin)
-    $mesa_actions = ['criar_conta_mesa', 'add_item_conta', 'remove_item_conta', 'fechar_conta_mesa', 'liberar_mesa_action', 'vincular_cliente_mesa', 'desvincular_cliente_mesa'];
+    $mesa_actions = ['criar_conta_mesa', 'add_item_conta', 'remove_item_conta', 'fechar_conta_mesa', 'confirmar_pagamento_mesa', 'liberar_mesa_action', 'vincular_cliente_mesa', 'desvincular_cliente_mesa'];
     if (in_array($action, $mesa_actions, true)) {
         $id_mesa_acao = (int)($_POST['id_mesa'] ?? 0);
         if (!mesa_pode_gerenciar($id_mesa_acao)) {
@@ -152,7 +152,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         if ($action === 'fechar_conta_mesa') {
-            fechar_conta((int)$_POST['id_pedido'], $_POST['forma_pagamento'] ?? 'DINHEIRO');
+            try {
+                fechar_conta((int)$_POST['id_pedido']);
+            } catch (Exception $e) {
+                header('Location: ' . $redir . '&erro=' . urlencode($e->getMessage()));
+                exit;
+            }
+            header('Location: ' . $redir);
+            exit;
+        }
+        if ($action === 'confirmar_pagamento_mesa') {
+            confirmar_pagamento((int)$_POST['id_pedido'], $_POST['forma_pagamento'] ?? 'DINHEIRO');
             header('Location: ' . $redir);
             exit;
         }

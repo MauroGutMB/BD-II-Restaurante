@@ -30,13 +30,22 @@ if ($id_mesa > 0) {
 
     $clientes    = $pode ? get_clientes_da_mesa($id_mesa) : [];
     $disponiveis = $pode ? get_clientes_sem_mesa() : [];
-    $pedido      = $pode ? get_pedido_aberto_por_mesa($id_mesa) : null;
-    $itens       = $pedido ? get_itens_do_pedido((int)$pedido['id_pedido']) : [];
-    $total       = (float)array_sum(array_map(fn($i) => $i['quantidade'] * $i['preco_unitario'], $itens));
     $produtos    = $pode ? get_produtos() : [];
     $servidores  = is_admin() ? get_servidores() : [];
-    // Categorias únicas dos produtos para o picker
     $cat_unicas  = array_values(array_unique(array_filter(array_column($produtos, 'categoria_nome'))));
+
+    // Conta atual da mesa (existe somente enquanto a mesa esta ocupada).
+    $conta = $pode ? get_conta_atual_mesa($id_mesa) : null;
+    $itens = $conta ? get_itens_do_pedido((int)$conta['id_pedido']) : [];
+    $total = (float)array_sum(array_map(fn($i) => $i['quantidade'] * $i['preco_unitario'], $itens));
+
+    // Estado do fluxo da conta: sem_conta -> editando -> aguardando_pagamento -> pago
+    $estado = 'sem_conta';
+    if ($conta) {
+        if ($conta['status'] === 'aberto')   $estado = 'editando';
+        elseif ((int)$conta['pago'] === 1)   $estado = 'pago';
+        else                                 $estado = 'aguardando_pagamento';
+    }
 
     $badge_s = match($mesa['status']) { 'ocupada' => 'badge--warning', 'livre' => 'badge--success', default => '' };
 }
@@ -156,18 +165,7 @@ else {
         </p>
     </div>
     <div class="page-actions">
-        <?php if ($pode): ?>
-        <?php if ($pedido): ?>
-        <span class="cell-sub" style="font-size:0.82rem;">Feche a conta antes de liberar a mesa.</span>
-        <button class="button button-outline" disabled style="opacity:0.45;cursor:not-allowed;">Liberar mesa</button>
-        <?php else: ?>
-        <form method="POST" action="/" class="inline-form">
-            <input type="hidden" name="action" value="liberar_mesa_action">
-            <input type="hidden" name="id_mesa" value="<?= $id_mesa ?>">
-            <button class="button button-outline" type="submit" onclick="return confirm('Desvincular todos os clientes e liberar a mesa?')">Liberar mesa</button>
-        </form>
-        <?php endif; ?>
-        <?php elseif ($mesa_livre && !$ja_tem_mesa): ?>
+        <?php if ($mesa_livre && !$pode && !$ja_tem_mesa): ?>
         <form method="POST" action="/" class="inline-form">
             <input type="hidden" name="action" value="tomar_mesa">
             <input type="hidden" name="id_mesa" value="<?= $id_mesa ?>">
@@ -203,19 +201,46 @@ else {
 
         <div class="table-card conta-card">
             <div class="conta-header">
-                <h2>Conta da mesa <?= $pedido ? '#' . $pedido['id_pedido'] : '' ?></h2>
-                <?php if (!$pedido): ?>
-                <form method="POST" action="/">
-                    <input type="hidden" name="action" value="criar_conta_mesa">
-                    <input type="hidden" name="id_mesa" value="<?= $id_mesa ?>">
-                    <button class="button" type="submit">Abrir conta</button>
-                </form>
-                <?php else: ?>
-                <span class="badge badge--warning">Em aberto</span>
+                <h2>Conta da mesa<?= $conta ? ' #' . $conta['id_pedido'] : '' ?></h2>
+                <?php if ($pode): ?>
+                <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                    <?php if ($estado === 'editando'): ?>
+                    <!-- Conta em aberto: feche a conta antes de liberar -->
+                    <span class="badge badge--warning">Em aberto</span>
+                    <button class="button button-outline" type="button" disabled>Liberar mesa</button>
+
+                    <?php elseif ($estado === 'aguardando_pagamento'): ?>
+                    <!-- Conta fechada aguardando pagamento: confirme o pagamento antes de liberar -->
+                    <span class="badge badge--info">Aguardando pagamento</span>
+                    <button class="button button-outline" type="button" disabled>Liberar mesa</button>
+
+                    <?php elseif ($estado === 'pago'): ?>
+                    <!-- Conta paga: ja pode liberar a mesa -->
+                    <span class="badge badge--success">Pago</span>
+                    <form method="POST" action="/" class="inline-form">
+                        <input type="hidden" name="action" value="liberar_mesa_action">
+                        <input type="hidden" name="id_mesa" value="<?= $id_mesa ?>">
+                        <button class="button" type="submit" onclick="return confirm('Desvincular todos os clientes e liberar a mesa?')">Liberar mesa</button>
+                    </form>
+
+                    <?php else: // sem_conta: mesa livre ?>
+                    <form method="POST" action="/" class="inline-form">
+                        <input type="hidden" name="action" value="criar_conta_mesa">
+                        <input type="hidden" name="id_mesa" value="<?= $id_mesa ?>">
+                        <button class="button" type="submit">Abrir conta</button>
+                    </form>
+                    <form method="POST" action="/" class="inline-form">
+                        <input type="hidden" name="action" value="liberar_mesa_action">
+                        <input type="hidden" name="id_mesa" value="<?= $id_mesa ?>">
+                        <button class="button button-ghost" type="submit" onclick="return confirm('Liberar a mesa? Voce deixara de ser o responsavel por ela.')">Liberar mesa</button>
+                    </form>
+                    <?php endif; ?>
+                </div>
                 <?php endif; ?>
             </div>
 
-            <?php if ($pedido): ?>
+            <?php if ($estado === 'editando'): ?>
+            <!-- ===== CONTA EM EDICAO: itens editaveis + adicionar + fechar ===== -->
             <table>
                 <thead>
                     <tr>
@@ -240,7 +265,7 @@ else {
                             <form method="POST" action="/" class="inline-form">
                                 <input type="hidden" name="action" value="remove_item_conta">
                                 <input type="hidden" name="id_item" value="<?= $it['id_item'] ?>">
-                                <input type="hidden" name="id_pedido" value="<?= $pedido['id_pedido'] ?>">
+                                <input type="hidden" name="id_pedido" value="<?= $conta['id_pedido'] ?>">
                                 <input type="hidden" name="id_mesa" value="<?= $id_mesa ?>">
                                 <button class="text-link" style="color:red;" type="submit" title="Remover item">×</button>
                             </form>
@@ -263,7 +288,7 @@ else {
             <!-- Adicionar item -->
             <form method="POST" action="/" class="add-item-form" id="form-add-item-<?= $id_mesa ?>" onsubmit="return validarAddItem_<?= $id_mesa ?>()">
                 <input type="hidden" name="action" value="add_item_conta">
-                <input type="hidden" name="id_pedido" value="<?= $pedido['id_pedido'] ?>">
+                <input type="hidden" name="id_pedido" value="<?= $conta['id_pedido'] ?>">
                 <input type="hidden" name="id_mesa" value="<?= $id_mesa ?>">
                 <input type="hidden" name="id_produto" id="hidden-id-produto-<?= $id_mesa ?>">
 
@@ -396,23 +421,79 @@ else {
             })();
             </script>
 
-            <!-- Fechar conta -->
+            <!-- Fechar conta: finaliza os itens e gera a nota fiscal (nao paga, nao libera) -->
             <form method="POST" action="/" class="fechar-conta-form">
                 <input type="hidden" name="action" value="fechar_conta_mesa">
-                <input type="hidden" name="id_pedido" value="<?= $pedido['id_pedido'] ?>">
+                <input type="hidden" name="id_pedido" value="<?= $conta['id_pedido'] ?>">
                 <input type="hidden" name="id_mesa" value="<?= $id_mesa ?>">
-                <label class="field" style="flex:1;">
-                    <span>Forma de pagamento</span>
-                    <select name="forma_pagamento">
-                        <option value="DINHEIRO">Dinheiro</option>
-                        <option value="PIX">Pix</option>
-                        <option value="CARTAO">Cartao</option>
-                    </select>
-                </label>
-                <button class="button" type="submit" onclick="return confirm('Fechar a conta? Isso nao libera a mesa automaticamente.')">Fechar conta</button>
+                <p class="cell-sub" style="flex:1;margin:0;min-width:180px;">Fechar finaliza os itens e gera a nota fiscal. O pagamento e a liberacao da mesa sao os proximos passos.</p>
+                <button class="button" type="submit" onclick="return confirm('Fechar a conta? Nao sera mais possivel adicionar itens.')">Fechar conta</button>
             </form>
 
-            <?php else: ?>
+            <?php elseif ($estado === 'aguardando_pagamento' || $estado === 'pago'): ?>
+            <!-- ===== NOTA FISCAL (somente leitura) ===== -->
+            <div style="padding:0.5rem 0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem;">
+                    <span style="font-weight:700;font-size:0.88rem;color:var(--brand-dark);">Nota fiscal</span>
+                    <?php if ($estado === 'pago'): ?>
+                    <span class="badge badge--success">Pago via <?= htmlspecialchars(ucfirst(strtolower((string)($conta['forma_de_pagamento'] ?? 'dinheiro')))) ?></span>
+                    <?php else: ?>
+                    <span class="badge badge--info">Aguardando pagamento</span>
+                    <?php endif; ?>
+                </div>
+                <?php if (!empty($itens)): ?>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Produto</th>
+                            <th style="text-align:right;">Qtd</th>
+                            <th style="text-align:right;">Unitario</th>
+                            <th style="text-align:right;">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($itens as $it): ?>
+                        <tr>
+                            <td><?= htmlspecialchars((string)$it['produto_nome']) ?></td>
+                            <td style="text-align:right;"><?= (int)$it['quantidade'] ?></td>
+                            <td style="text-align:right;">R$ <?= number_format((float)$it['preco_unitario'], 2, ',', '.') ?></td>
+                            <td style="text-align:right;font-weight:600;">R$ <?= number_format((float)($it['quantidade'] * $it['preco_unitario']), 2, ',', '.') ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="3" style="text-align:right;font-weight:600;border-top:1px solid var(--border);">Total</td>
+                            <td style="text-align:right;font-weight:700;font-size:1.05rem;color:var(--brand-dark);border-top:1px solid var(--border);">R$ <?= number_format($total, 2, ',', '.') ?></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <?php else: ?>
+                <p class="cell-sub" style="text-align:center;padding:1.5rem 0;">Conta sem itens.</p>
+                <?php endif; ?>
+
+                <?php if ($estado === 'aguardando_pagamento'): ?>
+                <!-- Confirmar pagamento: escolhe a forma e marca a conta como paga -->
+                <form method="POST" action="/" class="fechar-conta-form">
+                    <input type="hidden" name="action" value="confirmar_pagamento_mesa">
+                    <input type="hidden" name="id_pedido" value="<?= $conta['id_pedido'] ?>">
+                    <input type="hidden" name="id_mesa" value="<?= $id_mesa ?>">
+                    <label class="field" style="flex:1;">
+                        <span>Forma de pagamento</span>
+                        <select name="forma_pagamento">
+                            <option value="DINHEIRO">Dinheiro</option>
+                            <option value="PIX">Pix</option>
+                            <option value="CARTAO">Cartao</option>
+                        </select>
+                    </label>
+                    <button class="button" type="submit" onclick="return confirm('Confirmar o pagamento desta conta?')">Confirmar pagamento</button>
+                </form>
+                <?php else: ?>
+                <p class="cell-sub" style="margin-top:1rem;">Pagamento confirmado. Use "Liberar mesa" no topo para liberar a mesa.</p>
+                <?php endif; ?>
+            </div>
+
+            <?php else: // sem_conta ?>
             <p class="cell-sub" style="text-align:center;padding:3rem 0;">
                 Nenhuma conta aberta. Clique em "Abrir conta" para iniciar um pedido.
             </p>
@@ -437,34 +518,40 @@ else {
                         <div class="cell-title"><?= htmlspecialchars((string)$c['nome']) ?></div>
                         <?php if ($c['telefone']): ?><div class="cell-sub"><?= htmlspecialchars((string)$c['telefone']) ?></div><?php endif; ?>
                     </div>
+                    <?php if ($estado === 'editando'): ?>
                     <form method="POST" action="/" class="inline-form">
                         <input type="hidden" name="action" value="desvincular_cliente_mesa">
                         <input type="hidden" name="id_cliente" value="<?= $c['id_cliente'] ?>">
                         <input type="hidden" name="id_mesa" value="<?= $id_mesa ?>">
                         <button class="text-link" style="color:red;font-size:1.1rem;" title="Remover da mesa" type="submit">×</button>
                     </form>
+                    <?php endif; ?>
                 </li>
                 <?php endforeach; ?>
             </ul>
             <?php endif; ?>
 
-            <?php if (!empty($disponiveis)): ?>
-            <form method="POST" action="/" class="stack" style="margin-top:1rem;">
-                <input type="hidden" name="action" value="vincular_cliente_mesa">
-                <input type="hidden" name="id_mesa" value="<?= $id_mesa ?>">
-                <label class="field">
-                    <span>Vincular cliente</span>
-                    <select name="id_cliente" required>
-                        <option value="">Selecione o cliente</option>
-                        <?php foreach ($disponiveis as $d): ?>
-                        <option value="<?= $d['id_cliente'] ?>"><?= htmlspecialchars((string)$d['nome']) ?><?= $d['telefone'] ? ' - ' . htmlspecialchars((string)$d['telefone']) : '' ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </label>
-                <button class="button" type="submit">Vincular</button>
-            </form>
-            <?php else: ?>
-            <p class="cell-sub" style="margin-top:0.75rem;">Nenhum cliente disponivel para vincular.</p>
+            <?php if ($estado === 'editando'): ?>
+                <?php if (!empty($disponiveis)): ?>
+                <form method="POST" action="/" class="stack" style="margin-top:1rem;">
+                    <input type="hidden" name="action" value="vincular_cliente_mesa">
+                    <input type="hidden" name="id_mesa" value="<?= $id_mesa ?>">
+                    <label class="field">
+                        <span>Vincular cliente</span>
+                        <select name="id_cliente" required>
+                            <option value="">Selecione o cliente</option>
+                            <?php foreach ($disponiveis as $d): ?>
+                            <option value="<?= $d['id_cliente'] ?>"><?= htmlspecialchars((string)$d['nome']) ?><?= $d['telefone'] ? ' - ' . htmlspecialchars((string)$d['telefone']) : '' ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+                    <button class="button" type="submit">Vincular</button>
+                </form>
+                <?php else: ?>
+                <p class="cell-sub" style="margin-top:0.75rem;">Nenhum cliente disponivel para vincular.</p>
+                <?php endif; ?>
+            <?php elseif ($estado === 'sem_conta'): ?>
+            <p class="cell-sub" style="margin-top:0.75rem;">Abra a conta para vincular clientes a esta mesa.</p>
             <?php endif; ?>
         </div>
 

@@ -27,14 +27,15 @@ function db_connect() {
 }
 
 // PEDIDOS
-// Retorna apenas pedidos finalizados (extrato/historico)
+// Retorna apenas pedidos finalizados e pagos (extrato/historico).
+// Uma conta fechada mas ainda nao paga aparece somente na gestao da mesa.
 function get_pedidos() {
     $pdo = db_connect();
     $stmt = $pdo->query("SELECT p.*, m.numero as mesa, c.nome as cliente
                          FROM pedidos p
                          LEFT JOIN mesas m ON p.id_mesa = m.id_mesa
                          LEFT JOIN clientes c ON p.id_cliente = c.id_cliente
-                         WHERE p.status = 'fechado'
+                         WHERE p.status = 'fechado' AND p.pago = 1
                          ORDER BY p.id_pedido DESC");
     return $stmt->fetchAll();
 }
@@ -187,6 +188,19 @@ function get_pedido_aberto_por_mesa(int $id_mesa): ?array {
     return $stmt->fetch() ?: null;
 }
 
+// A "conta atual" da mesa: o ultimo pedido, mas SOMENTE enquanto a mesa esta
+// ocupada. Quando a mesa e liberada (status='livre'), nao ha conta atual e
+// pedidos de sessoes anteriores nao reaparecem (evita nota fiscal antiga).
+function get_conta_atual_mesa(int $id_mesa): ?array {
+    $pdo = db_connect();
+    $stmt = $pdo->prepare("SELECT p.* FROM pedidos p
+                           JOIN mesas m ON m.id_mesa = p.id_mesa
+                           WHERE p.id_mesa = ? AND m.status = 'ocupada'
+                           ORDER BY p.id_pedido DESC LIMIT 1");
+    $stmt->execute([$id_mesa]);
+    return $stmt->fetch() ?: null;
+}
+
 function get_itens_do_pedido(int $id_pedido): array {
     $pdo = db_connect();
     $stmt = $pdo->prepare("SELECT i.*, pr.nome as produto_nome
@@ -250,16 +264,39 @@ function remove_item_conta(int $id_item, int $id_pedido): void {
         ->execute([$id_item, $id_pedido]);
 }
 
-function fechar_conta(int $id_pedido, string $forma_pagamento): void {
+// Fecha a conta: apenas finaliza os itens (status='fechado'). NAO grava forma
+// de pagamento nem marca como pago - isso e feito em confirmar_pagamento().
+function fechar_conta(int $id_pedido): void {
     $pdo = db_connect();
-    $pdo->prepare("UPDATE pedidos SET status = 'fechado', forma_de_pagamento = ? WHERE id_pedido = ?")
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM itens_pedido WHERE id_pedido = ?");
+    $stmt->execute([$id_pedido]);
+    if ((int)$stmt->fetchColumn() === 0) {
+        throw new Exception("Adicione itens antes de fechar a conta.");
+    }
+    $pdo->prepare("UPDATE pedidos SET status = 'fechado' WHERE id_pedido = ? AND status = 'aberto'")
+        ->execute([$id_pedido]);
+}
+
+// Confirma o pagamento de uma conta ja fechada: grava a forma de pagamento e
+// marca pago=1. So entao a mesa pode ser liberada.
+function confirmar_pagamento(int $id_pedido, string $forma_pagamento): void {
+    $pdo = db_connect();
+    $pdo->prepare("UPDATE pedidos SET forma_de_pagamento = ?, pago = 1
+                   WHERE id_pedido = ? AND status = 'fechado' AND pago = 0")
         ->execute([$forma_pagamento, $id_pedido]);
 }
 
 function liberar_mesa(int $id_mesa): void {
-    // Nao fecha a conta automaticamente: isso e responsabilidade do servidor via 'fechar_conta'.
-    if (get_pedido_aberto_por_mesa($id_mesa)) {
-        throw new Exception("Ha uma conta em aberto nesta mesa. Feche-a antes de liberar.");
+    // So libera quando nao ha conta pendente. A conta atual precisa estar
+    // fechada E paga. Liberar nunca fecha/paga a conta automaticamente.
+    $conta = get_conta_atual_mesa($id_mesa);
+    if ($conta) {
+        if ($conta['status'] === 'aberto') {
+            throw new Exception("Ha uma conta em aberto nesta mesa. Feche-a antes de liberar.");
+        }
+        if ((int)$conta['pago'] !== 1) {
+            throw new Exception("Confirme o pagamento da conta antes de liberar a mesa.");
+        }
     }
     $pdo = db_connect();
     $pdo->beginTransaction();
@@ -276,11 +313,11 @@ function liberar_mesa(int $id_mesa): void {
 }
 
 function vincular_cliente_mesa(int $id_cliente, int $id_mesa): void {
+    // Apenas vincula o cliente. O status da mesa e governado exclusivamente
+    // pela conta (criar_conta_mesa -> ocupada, liberar_mesa -> livre).
     $pdo = db_connect();
     $pdo->prepare("UPDATE clientes SET id_mesa = ? WHERE id_cliente = ?")
         ->execute([$id_mesa, $id_cliente]);
-    $pdo->prepare("UPDATE mesas SET status = 'ocupada' WHERE id_mesa = ? AND status = 'livre'")
-        ->execute([$id_mesa]);
 }
 
 function desvincular_cliente_mesa(int $id_cliente): void {
